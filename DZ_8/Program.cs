@@ -1,124 +1,172 @@
 ﻿using System;
+using System.Collections.Generic;
 
-namespace BankApp
+namespace TaskManagerApp
 {
-    public enum AccountType
+    public enum ProjectStatus { Проект, Исполнение, Закрыт }
+    public enum TaskStatus { Назначена, ВРаботе, НаПроверке, Выполнена }
+
+    public class Employee
     {
-        Current,
-        Savings
+        public string Name { get; set; }
+
+        public Employee(string name)
+        {
+            Name = name;
+        }
     }
 
-    public class BankAccount
+    public class Report
     {
-        private static int lastAccountNumber = 0;
+        public string Text { get; set; }
+        public DateTime Date { get; set; }
+        public Employee Author { get; set; }
 
-        private static int GenerateAccountNumber()
+        public Report(string text, Employee author)
         {
-            lastAccountNumber++;
-            return lastAccountNumber;
+            Text = text;
+            Date = DateTime.Now;
+            Author = author;
         }
+    }
 
-        private string account_number;
-        private decimal balance;
-        private AccountType type;
-        public BankAccount()
+    public class Task
+    {
+        public string Description { get; set; }
+        public DateTime Deadline { get; set; }
+        public Employee Initiator { get; set; }
+        public Employee Assignee { get; set; } // Исполнитель
+        public TaskStatus Status { get; set; }
+        public Report Report { get; set; }
+
+        public Task(string description, DateTime deadline, Employee initiator)
         {
-            account_number = GenerateAccountNumber().ToString();
-        }
-        public BankAccount(decimal initialBalance)
-        {
-            account_number = GenerateAccountNumber().ToString();
-            Balance = initialBalance;
-        }
-        public BankAccount(AccountType accType)
-        {
-            account_number = GenerateAccountNumber().ToString();
-            Type = accType;
-        }
-        public BankAccount(decimal initialBalance, AccountType accType)
-        {
-            account_number = GenerateAccountNumber().ToString();
-            Balance = initialBalance;
-            Type = accType;
-        }
-        public string AccountNumber
-        {
-            get { return account_number; }
+            Description = description;
+            Deadline = deadline;
+            Initiator = initiator;
+            Status = TaskStatus.Назначена;
+            Report = null;
         }
 
-        public decimal Balance
+        public void TakeToWork(Employee employee)
         {
-            get { return balance; }
-            private set
+            if (Status == TaskStatus.Назначена && Assignee == employee)
             {
-                if (value >= 0)
-                    balance = value;
-                else
-                    Console.WriteLine("Ошибка: баланс не может быть отрицательным!");
-            }
-        }
-
-        public AccountType Type
-        {
-            get { return type; }
-            private set { type = value; }
-        }
-
-        public void Deposit(decimal amount)
-        {
-            if (amount > 0)
-            {
-                Balance += amount;
-                Console.WriteLine($"Счет {AccountNumber} пополнен на {amount} руб.");
+                Status = TaskStatus.ВРаботе;
+                Console.WriteLine($"[{employee.Name}] взял задачу '{Description}' в работу.");
             }
             else
             {
-                Console.WriteLine("Ошибка: сумма пополнения должна быть больше нуля.");
+                Console.WriteLine($"Ошибка: нельзя взять задачу в работу.");
             }
         }
 
-        public void Withdraw(decimal amount)
+        public void Delegate(Employee newEmployee)
         {
-            if (amount <= 0)
+            if (Status == TaskStatus.Назначена || Status == TaskStatus.ВРаботе)
             {
-                Console.WriteLine("Ошибка: сумма снятия должна быть больше нуля.");
+                Assignee = newEmployee;
+                Status = TaskStatus.Назначена;
+                Console.WriteLine($"Задача '{Description}' делегирована сотруднику {newEmployee.Name}.");
             }
-            else if (amount > Balance)
+        }
+
+        public void Reject()
+        {
+            if (Status == TaskStatus.Назначена)
             {
-                Console.WriteLine("Ошибка: недостаточно средств на счете.");
+                Assignee = null;
+                Console.WriteLine($"Задача '{Description}' отклонена и возвращена тимлиду.");
+            }
+        }
+
+        public void WriteReport(string text)
+        {
+            if (Status == TaskStatus.ВРаботе)
+            {
+                Report = new Report(text, Assignee);
+                Status = TaskStatus.НаПроверке;
+                Console.WriteLine($"Отчет по задаче '{Description}' отправлен на проверку.");
             }
             else
             {
-                Balance -= amount;
-                Console.WriteLine($"Со счета {AccountNumber} успешно снято {amount} руб.");
+                Console.WriteLine("Ошибка: нельзя написать отчет, задача не в работе.");
             }
         }
+    }
+    public class Project
+    {
+        public string Description { get; set; }
+        public DateTime Deadline { get; set; }
+        public Employee Customer { get; set; } // Заказчик
+        public Employee TeamLead { get; set; } // Тимлид
+        public List<Task> Tasks { get; set; }
+        public ProjectStatus Status { get; set; }
 
-        public void Transfer(BankAccount targetAccount, decimal amount)
+        public Project(string description, DateTime deadline, Employee customer, Employee teamLead)
         {
-            Console.WriteLine($"\n--- Попытка перевода {amount} руб. со счета {this.AccountNumber} на счет {targetAccount.AccountNumber} ---");
+            Description = description;
+            Deadline = deadline;
+            Customer = customer;
+            TeamLead = teamLead;
+            Tasks = new List<Task>();
+            Status = ProjectStatus.Проект;
+        }
 
-            if (amount <= 0)
+        public void CreateTask(string description, DateTime deadline, Employee assignee)
+        {
+            if (Status != ProjectStatus.Проект)
             {
-                Console.WriteLine("Ошибка: сумма перевода должна быть больше нуля.");
+                Console.WriteLine("Ошибка: нельзя создавать задачи, проект уже в работе или закрыт.");
                 return;
             }
 
-            if (amount > Balance)
+            Task newTask = new Task(description, deadline, TeamLead);
+            newTask.Assignee = assignee;
+            Tasks.Add(newTask);
+            Console.WriteLine($"Создана задача '{description}' для {assignee.Name}.");
+        }
+
+        public void StartExecution()
+        {
+            if (Status == ProjectStatus.Проект)
             {
-                Console.WriteLine("Ошибка: недостаточно средств для перевода.");
+                Status = ProjectStatus.Исполнение;
+                Console.WriteLine("Проект переведен в статус 'Исполнение'.");
+            }
+        }
+
+        public void ReviewReport(Task task, bool isApproved)
+        {
+            if (task.Status != TaskStatus.НаПроверке)
+            {
+                Console.WriteLine("Ошибка: у задачи нет отчета на проверке.");
                 return;
             }
 
-            this.Withdraw(amount);
-            targetAccount.Deposit(amount);
+            if (isApproved)
+            {
+                task.Status = TaskStatus.Выполнена;
+                Console.WriteLine($"Тимлид УТВЕРДИЛ отчет по задаче '{task.Description}'. Задача выполнена.");
+            }
+            else
+            {
+                task.Status = TaskStatus.ВРаботе;
+                task.Report = null;
+                Console.WriteLine($"Тимлид ВЕРНУЛ на доработку отчет по задаче '{task.Description}'.");
+            }
 
-            Console.WriteLine($"Перевод {amount} руб. выполнен успешно.");
+            CheckProjectClosure();
         }
 
-        public void PrintInfo()
+        private void CheckProjectClosure()
         {
-            Console.WriteLine($"[Счет {AccountNumber}] Баланс: {Balance} руб. | Тип: {Type}");
+            foreach (var task in Tasks)
+            {
+                if (task.Status != TaskStatus.Выполнена) return;
+            }
+            Status = ProjectStatus.Закрыт;
+            Console.WriteLine("ВСЕ ЗАДАЧИ ВЫПОЛНЕНЫ! Проект ЗАКРЫТ.");
         }
     }
 
@@ -126,17 +174,76 @@ namespace BankApp
     {
         static void Main(string[] args)
         {
-            BankAccount acc1 = new BankAccount();
-            acc1.PrintInfo();
+            List<Employee> team = new List<Employee>();
+            for (int i = 1; i <= 10; i++)
+            {
+                team.Add(new Employee($"Сотрудник_{i}"));
+            }
+            Employee customer = new Employee("Заказчик_Иван");
+            Employee teamLead = new Employee("Тимлид_Петр");
 
-            BankAccount acc2 = new BankAccount(1000m);
-            acc2.PrintInfo();
+            Project project = new Project("Разработка нового сайта", DateTime.Now.AddMonths(1), customer, teamLead);
 
-            BankAccount acc3 = new BankAccount(AccountType.Savings);
-            acc3.PrintInfo();
+            for (int i = 0; i < 10; i++)
+            {
+                project.CreateTask($"Задача №{i + 1}", DateTime.Now.AddDays(7), team[i]);
+            }
 
-            BankAccount acc4 = new BankAccount(5000m, AccountType.Current);
-            acc4.PrintInfo();
+            project.StartExecution();
+
+            Console.WriteLine("\n--- СИМУЛЯЦИЯ РАБОТЫ ---");
+
+            Task task1 = project.Tasks[0];
+            task1.TakeToWork(team[0]);
+            task1.WriteReport("Сделал главную страницу.");
+
+            // Сотрудник 2 берет задачу, но делегирует её Сотруднику 3
+            Task task2 = project.Tasks[1];
+            task2.TakeToWork(team[1]);
+            task2.Delegate(team[2]);
+
+            // Сотрудник 4 отклоняет задачу
+            Task task4 = project.Tasks[3];
+            task4.Reject();
+
+            // Тимлид проверяет отчет по первой задаче и утверждает его
+            project.ReviewReport(task1, true);
+
+            // Сотрудник 5 берет задачу, пишет отчет, а Тимлид отправляет на доработку
+            Task task5 = project.Tasks[4];
+            task5.TakeToWork(team[4]);
+            task5.WriteReport("Сделал что-то не то.");
+            project.ReviewReport(task5, false);
+
+            Console.WriteLine("\n--- ИМИТАЦИЯ ВЫПОЛНЕНИЯ ОСТАЛЬНЫХ ЗАДАЧ ---");
+
+            // Переназначаем отклоненную задачу Тимлидом
+            task4.Assignee = team[3];
+            Console.WriteLine($"\n[Имитация] Тимлид переназначил отклоненную задачу '{task4.Description}' на {team[3].Name}.");
+
+            for (int i = 0; i < 10; i++)
+            {
+                Task currentTask = project.Tasks[i];
+
+                if (currentTask.Status != TaskStatus.Выполнена && currentTask.Assignee != null)
+                {
+                    if (currentTask.Status == TaskStatus.Назначена)
+                    {
+                        currentTask.TakeToWork(currentTask.Assignee);
+                    }
+                    if (currentTask.Status == TaskStatus.ВРаботе)
+                    {
+                        currentTask.WriteReport("Исправленный/Финальный отчет.");
+                    }
+
+                    if (currentTask.Status == TaskStatus.НаПроверке)
+                    {
+                        project.ReviewReport(currentTask, true);
+                    }
+                }
+            }
+
+            Console.WriteLine($"\nИтоговый статус проекта: {project.Status}");
         }
     }
 }
